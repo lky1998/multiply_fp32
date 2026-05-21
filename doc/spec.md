@@ -26,6 +26,18 @@ This design is intended to:
 
 ---
 
+## CRITICAL: IEEE-754 FP32 Format
+Bit Layout: [31] [30:23] [22:0] = [S] [EXP] [FRAC]
+- Bit 31: Sign bit (0=positive, 1=negative)
+- Bits 30:23: 8-bit biased exponent (bias = 127)
+- Bits 22:0: 23-bit fraction (mantissa without hidden 1)
+
+For normal numbers:
+- Actual mantissa = {1'b1, frac[22:0]} (24 bits total)
+- Actual exponent = exp - 127 (unbiased)
+
+---
+
 ## Handshake Contract
 
 ### Start condition
@@ -74,10 +86,7 @@ The primary verification target is normal FP32 operands:
 
 ### Out-of-scope for primary grading
 Unless explicitly tested, the following are not required for full credit:
-- NaN
-- Infinity
-- Zero
-- Subnormals / denormals
+- NaN, Infinity, Zero, Subnormals / denormals
 
 If special-case behavior is implemented, it must not break the normal-number path.
 
@@ -94,7 +103,7 @@ Internal signals:
 - `a_s`, `b_s`, `z_s` : sign bits
 - `a_e`, `b_e`, `z_e` : signed unbiased exponents
 - `a_m`, `b_m` : 24-bit mantissas with hidden 1 for normal numbers
-- `product` : mantissa product
+- `product` : mantissa product (MUST be 48-bit wide for full precision)
 - `guard_bit`, `round_bit`, `sticky` : rounding support bits
 
 ---
@@ -106,7 +115,7 @@ To keep the design stable and reduce debugging mistakes, implement in this order
 2. Normal-number sign handling
 3. Exponent extraction and unbiased conversion
 4. 24-bit mantissa formation with hidden 1
-5. Mantissa multiplication
+5. Mantissa multiplication (48-bit precision)
 6. Normalization
 7. Round-to-nearest-even
 8. Pack result
@@ -133,20 +142,17 @@ The design uses a 7-stage internal sequence controlled by `busy` and `counter`.
 - Prepare exponent sum and mantissa multiplication
 
 ### Stage 4 — Multiply mantissas
-- Compute the mantissa product using a sufficiently wide register
+- Compute the mantissa product using a 48-bit wide register (24×24=48 bits)
 - Compute the raw exponent sum
 
 ### Stage 5 — Normalize product and extract rounding bits
 - Normalize the product so the leading 1 is in the expected position
-- Extract:
-  - result mantissa
-  - guard bit
-  - round bit
-  - sticky bit
+- Extract: result mantissa, guard bit, round bit, sticky bit
+- If product[47] == 1: shift right by 1, increment exponent
+- Extract guard/round/sticky bits based on normalization
 
 ### Stage 6 — Round to nearest even
-- Apply RNE:
-  - if `guard_bit == 1` and (`round_bit == 1` or `sticky == 1` or LSB == 1), increment mantissa
+- Apply RNE: if `guard_bit == 1` and (`round_bit == 1` or `sticky == 1` or LSB == 1), increment mantissa
 - If rounding causes mantissa overflow, renormalize and increment exponent
 
 ### Stage 7 — Pack result
@@ -154,6 +160,35 @@ The design uses a 7-stage internal sequence controlled by `busy` and `counter`.
 - Pack `z = {z_s, biased_exp, fraction}`
 - Assert `out_valid` for 1 cycle
 - Clear `busy`
+
+---
+
+## CRITICAL: Precise Rounding Implementation
+
+### Mantissa Multiplication MUST Use 48-bit Result
+The mantissa multiplication MUST produce a full 48-bit result. Use: `product = a_mant * b_mant` where product is 48-bit wide.
+
+### Rounding Bit Extraction
+The rounding decision depends on three bits below the final mantissa:
+- Guard bit: First bit below mantissa
+- Round bit: Second bit below mantissa  
+- Sticky bit: OR of all remaining lower bits
+
+### Round-to-Nearest-Even (RNE) Rule
+Round up if: `guard_bit == 1` AND (`round_bit == 1` OR `sticky_bit == 1` OR `lsb == 1`)
+
+This ensures:
+- Exact halfway cases round to even (LSB = 0)
+- Non-exact cases round to nearest
+
+### Normalization Logic
+After multiplication, check if product[47] == 1:
+- If yes: result ≥ 2.0, shift right by 1, increment exponent
+- If no: result < 2.0, no shift needed
+
+Extract rounding bits accordingly:
+- Normalized: mantissa=product[46:24], guard=product[23], round=product[22], sticky=|product[21:0]
+- Not normalized: mantissa=product[45:23], guard=product[22], round=product[21], sticky=|product[20:0]
 
 ---
 
@@ -182,6 +217,8 @@ Recommended testbench usage:
 - Only assert `valid` when `busy == 0`
 - Sample `z` only when `out_valid == 1`
 - Use normal FP32 test values for the main functional checks
+- The test requires bit-exact results - off-by-1 errors will fail
+- Focus on precise rounding implementation to avoid precision errors
 
 ---
 
@@ -190,4 +227,5 @@ This module is a 7-cycle, single-issue FP32 multiplier with:
 - deterministic handshake timing,
 - normal-number focus,
 - round-to-nearest-even,
-- fixed-latency output valid.
+- fixed-latency output valid,
+- bit-exact IEEE-754 compliance for normal operands.
