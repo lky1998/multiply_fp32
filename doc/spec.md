@@ -36,11 +36,6 @@ For normal numbers:
 - Actual mantissa = {1'b1, frac[22:0]} (24 bits total)
 - Actual exponent = exp - 127 (unbiased)
 
-CRITICAL EXPONENT RANGES:
-- exp = 0: Zero or subnormal (handle as zero for simplicity)
-- exp = 1-254: Normal numbers
-- exp = 255: Infinity or NaN (handle as infinity for simplicity)
-
 ---
 
 ## Handshake Contract
@@ -89,11 +84,11 @@ The primary verification target is normal FP32 operands:
 - standard IEEE-754 sign handling applies
 - rounding mode is round-to-nearest-even
 
-### CRITICAL: Handle Edge Cases
-While normal numbers are the focus, you MUST handle these cases correctly:
-- **Underflow**: If final exponent < 1, result = 0x00000000 (positive zero)
-- **Overflow**: If final exponent > 254, result = 0x7F800000 (positive infinity) or 0xFF800000 (negative infinity)
-- **Zero inputs**: If either input has exp=0, result = 0x00000000 (zero)
+### Out-of-scope for primary grading
+Unless explicitly tested, the following are not required for full credit:
+- NaN, Infinity, Zero, Subnormals / denormals
+
+If special-case behavior is implemented, it must not break the normal-number path.
 
 ---
 
@@ -117,14 +112,15 @@ Internal signals:
 To keep the design stable and reduce debugging mistakes, implement in this order:
 
 1. Handshake / FSM only
-2. Special case detection (zero, underflow, overflow)
-3. Normal-number sign handling
-4. Exponent extraction and unbiased conversion
-5. 24-bit mantissa formation with hidden 1
-6. Mantissa multiplication (48-bit precision)
-7. Normalization
-8. Round-to-nearest-even
-9. Pack result with overflow/underflow checks
+2. Normal-number sign handling
+3. Exponent extraction and unbiased conversion
+4. 24-bit mantissa formation with hidden 1
+5. Mantissa multiplication (48-bit precision)
+6. Normalization
+7. Round-to-nearest-even
+8. Pack result
+
+Do not overcomplicate special-case behavior unless required by tests.
 
 ---
 
@@ -137,15 +133,13 @@ The design uses a 7-stage internal sequence controlled by `busy` and `counter`.
 - Capture sign, exponent, and fraction fields
 - Initialize internal registers
 
-### Stage 2 — Special case detection and mantissa building
-- Check for zero inputs: if a_exp==0 or b_exp==0, set result to zero
+### Stage 2 — Build mantissas and exponents
 - For normal operands, form 24-bit mantissas as `{1'b1, frac}`
 - Convert biased exponent to unbiased exponent by subtracting 127
 
 ### Stage 3 — Compute result sign and core multiply setup
 - Compute result sign: `z_s = a_s ^ b_s`
 - Prepare exponent sum and mantissa multiplication
-- Early exit for zero cases
 
 ### Stage 4 — Multiply mantissas
 - Compute the mantissa product using a 48-bit wide register (24×24=48 bits)
@@ -161,11 +155,9 @@ The design uses a 7-stage internal sequence controlled by `busy` and `counter`.
 - Apply RNE: if `guard_bit == 1` and (`round_bit == 1` or `sticky == 1` or LSB == 1), increment mantissa
 - If rounding causes mantissa overflow, renormalize and increment exponent
 
-### Stage 7 — Pack result with overflow/underflow handling
-- CRITICAL: Check for underflow/overflow BEFORE packing
-- If final_exp < 1: result = {z_s, 8'h00, 23'h000000} (signed zero)
-- If final_exp > 254: result = {z_s, 8'hFF, 23'h000000} (signed infinity)
-- Otherwise: result = {z_s, (final_exp + 127)[7:0], final_mantissa}
+### Stage 7 — Pack result
+- Convert the exponent back to biased form
+- Pack `z = {z_s, biased_exp, fraction}`
 - Assert `out_valid` for 1 cycle
 - Clear `busy`
 
@@ -185,6 +177,10 @@ The rounding decision depends on three bits below the final mantissa:
 ### Round-to-Nearest-Even (RNE) Rule
 Round up if: `guard_bit == 1` AND (`round_bit == 1` OR `sticky_bit == 1` OR `lsb == 1`)
 
+This ensures:
+- Exact halfway cases round to even (LSB = 0)
+- Non-exact cases round to nearest
+
 ### Normalization Logic
 After multiplication, check if product[47] == 1:
 - If yes: result ≥ 2.0, shift right by 1, increment exponent
@@ -193,24 +189,6 @@ After multiplication, check if product[47] == 1:
 Extract rounding bits accordingly:
 - Normalized: mantissa=product[46:24], guard=product[23], round=product[22], sticky=|product[21:0]
 - Not normalized: mantissa=product[45:23], guard=product[22], round=product[21], sticky=|product[20:0]
-
----
-
-## CRITICAL: Overflow and Underflow Handling
-
-### Underflow Detection
-After normalization and rounding, check final exponent: if (final_exp_adjusted < 1) result = {result_sign, 8'h00, 23'h000000}
-
-### Overflow Detection  
-After normalization and rounding, check final exponent: if (final_exp_adjusted > 254) result = {result_sign, 8'hFF, 23'h000000}
-
-### Zero Input Handling
-In stage 2, check for zero inputs: if (a_exp == 8'h00 || b_exp == 8'h00) set result_is_zero flag and skip normal computation
-
-### Implementation Priority
-1. **First implement normal number path** (stages 1-7)
-2. **Then add underflow/overflow checks** in stage 7
-3. **Finally add zero input detection** in stage 2
 
 ---
 
@@ -224,12 +202,12 @@ For normal inputs:
 ---
 
 ## Special-Case Policy
-**IMPORTANT**: While normal numbers are the primary focus, the test cases include edge cases that cause underflow/overflow. You MUST handle:
-- Zero inputs (exp=0) → result is zero
-- Underflow (final exp < 1) → result is zero  
-- Overflow (final exp > 254) → result is infinity
+To reduce ambiguity:
+- The grading focus is normal-number multiplication
+- Special-case support is optional unless required by tests
+- Do not let special-case logic disturb the normal path
 
-These cases are simple to implement and will significantly improve your pass rate.
+If special cases are implemented, they should be handled cleanly and separately from the normal path.
 
 ---
 
@@ -241,15 +219,13 @@ Recommended testbench usage:
 - Use normal FP32 test values for the main functional checks
 - The test requires bit-exact results - off-by-1 errors will fail
 - Focus on precise rounding implementation to avoid precision errors
-- Handle underflow/overflow cases correctly to avoid major errors
 
 ---
 
 ## Summary
 This module is a 7-cycle, single-issue FP32 multiplier with:
 - deterministic handshake timing,
-- normal-number focus with essential edge case handling,
+- normal-number focus,
 - round-to-nearest-even,
 - fixed-latency output valid,
-- bit-exact IEEE-754 compliance for normal operands,
-- correct underflow/overflow behavior for edge cases.
+- bit-exact IEEE-754 compliance for normal operands.
