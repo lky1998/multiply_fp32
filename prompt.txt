@@ -1,6 +1,31 @@
-Complete the given partial Systemverilog RTL code based on the specification doc/spec.md. The RTL code should be synthesizable.
-Make sure that the name of the files match with the following:
-- Top:        multiply_fp32.sv
+Complete the given partial SystemVerilog RTL code based on doc/spec.md.
 
+Requirements:
+- The top module/file is `multiply_fp32.sv`
+- Keep the code synthesizable
+- The environment uses Icarus Verilog
+- Do NOT use SystemVerilog Assertion (SVA) property/sequence syntax
+- Preserve the module interface unless the spec explicitly requires otherwise
 
-**Important**: This environment uses Icarus Verilog for testing. Avoid using SystemVerilog Assertion (SVA) property/sequence syntax if adding assertions.$
+Priority order:
+1) Correct `valid` / `out_valid` handshake timing
+2) Correct normal-number FP32 multiplication
+3) Clean synthesizable RTL
+4) Optional special-case support only if it does not disturb the normal path
+
+Behavior expectations:
+- `valid` is a 1-cycle start pulse sampled only when `busy == 0`
+- `out_valid` must pulse exactly 7 clock cycles after acceptance
+- Ignore `valid` while busy
+- Assume the primary test focus is normal IEEE-754 binary32 operands (`exp` in `[1..254]`)
+- Do not overcomplicate subnormal / NaN / Inf handling unless needed
+- Implement the simplest correct 7-cycle sequential design consistent with the spec
+- Avoid speculative corner-case logic, extra pipeline stages, or unnecessary debugging scaffolding
+
+Coding constraints:
+- Output synthesizable SystemVerilog compatible with Icarus Verilog
+- Do not use SVA property/sequence syntax
+- Use only standard synthesizable RTL constructs
+
+Task:
+Complete the RTL in `multiply_fp32.sv`. The top module name must remain `multiply_fp32`.
