@@ -1,12 +1,12 @@
 # fmultiplier — FP32 Multiplier (7-Cycle Sequential, Handshake-Based)
 
 ## Overview
-`fmultiplier` is a **single-issue, multi-cycle** single-precision floating-point multiplier. It accepts one operation at a time using a `valid` / `out_valid` handshake and produces a 32-bit IEEE-754 binary32 result.
+`fmultiplier` is a single-issue, multi-cycle single-precision floating-point multiplier. It accepts one operation at a time using a `valid` / `out_valid` handshake and produces a 32-bit IEEE-754 binary32 result.
 
 This design is intended to:
-- produce **bit-accurate results for normal FP32 numbers**,
-- use **round-to-nearest-even (RNE)**,
-- have **fixed latency of exactly 7 clock cycles** from input acceptance to output valid,
+- produce bit-accurate results for normal FP32 numbers,
+- use round-to-nearest-even (RNE),
+- have fixed latency of exactly 7 clock cycles from input acceptance to output valid,
 - compute `z = a * b`, where `a`, `b`, and `z` are 32-bit IEEE-754 single-precision values.
 
 ---
@@ -40,37 +40,37 @@ This design is intended to:
 - Any `valid` asserted while busy is high is ignored.
 
 ### Completion condition
-- `out_valid` must assert **exactly 7 rising clock edges after the start edge**.
+- `out_valid` must assert exactly 7 rising clock edges after the start edge.
 - `z` must be valid on the same cycle as `out_valid`.
 - `busy` is deasserted after the result is produced.
 
 ### Timing definition
 To avoid ambiguity:
-- The clock edge that samples `valid == 1` while idle is **cycle 0**.
-- `out_valid` must pulse on **cycle 7**.
+- The clock edge that samples `valid == 1` while idle is cycle 0.
+- `out_valid` must pulse on cycle 7.
 
 ---
 
 ## Latency and Throughput
 
 ### Latency
-- Fixed latency: **7 cycles**
-- Start edge to `out_valid`: **exactly 7 rising edges**
+- Fixed latency: 7 cycles
+- Start edge to `out_valid`: exactly 7 rising edges
 
 ### Throughput
-- **Single-issue design**
-- Maximum throughput is **1 result every 7 cycles**
+- Single-issue design
+- Maximum throughput is 1 result every 7 cycles
 
 ---
 
 ## Target Operand Scope
 
 ### Primary target
-The primary verification target is **normal FP32 operands**:
+The primary verification target is normal FP32 operands:
 - `exp ∈ [1..254]`
 - operands are finite, normal values
 - standard IEEE-754 sign handling applies
-- rounding mode is **round-to-nearest-even**
+- rounding mode is round-to-nearest-even
 
 ### Out-of-scope for primary grading
 Unless explicitly tested, the following are not required for full credit:
@@ -102,14 +102,14 @@ Internal signals:
 ## Recommended Implementation Order
 To keep the design stable and reduce debugging mistakes, implement in this order:
 
-1. **Handshake / FSM only**
-2. **Normal-number sign handling**
-3. **Exponent extraction and unbiased conversion**
-4. **24-bit mantissa formation with hidden 1**
-5. **Mantissa multiplication**
-6. **Normalization**
-7. **Round-to-nearest-even**
-8. **Pack result**
+1. Handshake / FSM only
+2. Normal-number sign handling
+3. Exponent extraction and unbiased conversion
+4. 24-bit mantissa formation with hidden 1
+5. Mantissa multiplication
+6. Normalization
+7. Round-to-nearest-even
+8. Pack result
 
 Do not overcomplicate special-case behavior unless required by tests.
 
@@ -168,7 +168,7 @@ For normal inputs:
 
 ## Special-Case Policy
 To reduce ambiguity:
-- The grading focus is **normal-number multiplication**
+- The grading focus is normal-number multiplication
 - Special-case support is optional unless required by tests
 - Do not let special-case logic disturb the normal path
 
@@ -186,8 +186,8 @@ Recommended testbench usage:
 ---
 
 ## Summary
-This module is a **7-cycle, single-issue FP32 multiplier** with:
+This module is a 7-cycle, single-issue FP32 multiplier with:
 - deterministic handshake timing,
 - normal-number focus,
 - round-to-nearest-even,
-- fixed-latency output valid. lk
+- fixed-latency output valid.
