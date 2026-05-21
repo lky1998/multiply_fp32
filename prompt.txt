@@ -9,7 +9,7 @@ Requirements:
 
 Priority order:
 1) Correct `valid` / `out_valid` handshake timing
-2) Correct normal-number FP32 multiplication
+2) Correct normal-number FP32 multiplication with bit-exact precision
 3) Clean synthesizable RTL
 4) Optional special-case support only if it does not disturb the normal path
 
@@ -22,10 +22,16 @@ Behavior expectations:
 - Implement the simplest correct 7-cycle sequential design consistent with the spec
 - Avoid speculative corner-case logic, extra pipeline stages, or unnecessary debugging scaffolding
 
+CRITICAL PRECISION REQUIREMENTS:
+- Use 48-bit mantissa multiplication (24×24=48 bits) for full precision
+- Implement exact IEEE-754 round-to-nearest-even rounding
+- The test requires bit-exact correctness - off-by-1 rounding errors will cause failure
+- Follow the precise rounding bit extraction and normalization logic in the spec
+
 Coding constraints:
 - Output synthesizable SystemVerilog compatible with Icarus Verilog
 - Do not use SVA property/sequence syntax
 - Use only standard synthesizable RTL constructs
 
 Task:
-Complete the RTL in `multiply_fp32.sv`. The top module name must remain `multiply_fp32`.
+Complete the RTL in `multiply_fp32.sv`. The top module name must remain `multiply_fp32`. Pay special attention to the rounding implementation details in the specification to achieve bit-exact IEEE-754 compliance.
