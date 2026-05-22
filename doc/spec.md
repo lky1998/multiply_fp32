@@ -1,7 +1,7 @@
-# fmultiplier — FP32 Multiplier (7-Cycle Sequential, Handshake-Based)
+# multiply_fp32 — FP32 Multiplier (7-Cycle Sequential, Handshake-Based)
 
 ## Overview
-`fmultiplier` is a single-issue, multi-cycle single-precision floating-point multiplier. It accepts one operation at a time using a `valid` / `out_valid` handshake and produces a 32-bit IEEE-754 binary32 result.
+`multiply_fp32` is a single-issue, multi-cycle single-precision floating-point multiplier. It accepts one operation at a time using a `valid` / `out_valid` handshake and produces a 32-bit IEEE-754 binary32 result.
 
 This design must:
 - produce bit-accurate results for normal FP32 numbers,
@@ -38,22 +38,25 @@ For normal numbers:
 
 ---
 
-## Essential Edge Cases
+## Special-Case Behavior
 
-### Zero / Subnormal Input Detection
-If either input has `exp == 0`:
-- result must be zero
-- result sign = `a_sign ^ b_sign`
+Apply these rules in order:
 
-### Overflow Detection
-If the final biased exponent is `>= 255`:
-- result = infinity
-- result sign = `a_sign ^ b_sign`
+1. **Zero / subnormal input**
+   - If either operand has `exp == 0`, the result must be signed zero:
+     `z = {a_sign ^ b_sign, 31'b0}`
 
-### Underflow Detection
-If the final biased exponent is `<= 0`:
-- result = zero
-- result sign = `a_sign ^ b_sign`
+2. **Overflow**
+   - If the normalized and rounded exponent is `>= 255`, the result must be signed infinity:
+     `z = {a_sign ^ b_sign, 8'hFF, 23'b0}`
+
+3. **Underflow**
+   - If the normalized and rounded exponent is `<= 0`, the result must be signed zero:
+     `z = {a_sign ^ b_sign, 31'b0}`
+
+4. **No denormal outputs**
+   - Denormal results are not required.
+   - Any underflowed result must be flushed to signed zero.
 
 ---
 
@@ -95,7 +98,6 @@ If the final biased exponent is `<= 0`:
 
 ## Algorithm Overview
 
-### Core Multiplication Steps
 1. Extract sign, exponent, and fraction from both operands
 2. Check edge cases first
 3. Build mantissas as `{1'b1, frac[22:0]}` for normal numbers
@@ -121,4 +123,18 @@ For each operand:
 ## Precise Implementation Requirements
 
 ### Mantissa Multiplication
-Must use 48-bit result:
+- Must use a 48-bit product from 24-bit × 24-bit multiplication.
+
+### Rounding
+- Must implement round-to-nearest-even.
+- Use guard, round, and sticky bits when forming the final 23-bit fraction.
+
+### Normalization
+- Normalize the product before rounding.
+- Adjust exponent accordingly.
+
+### Packing
+- Final result must be packed as:
+  - sign = `a_sign ^ b_sign`
+  - exponent = adjusted biased exponent
+  - fraction = normalized rounded fraction
