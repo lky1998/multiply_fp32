@@ -1,43 +1,45 @@
-Complete the given partial SystemVerilog RTL code based on doc/spec.md.
+Complete the SystemVerilog RTL in `multiply_fp32.sv` for module `fmultiplier`.
 
 Requirements:
-- The top module/file is `multiply_fp32.sv` 
-- The module name must be `fmultiplier` (as specified in doc/spec.md)
+- Top file: `multiply_fp32.sv`
+- Module name: `fmultiplier`
 - Keep the code synthesizable
-- The environment uses Icarus Verilog
-- Do NOT use SystemVerilog Assertion (SVA) property/sequence syntax
-- Preserve the module interface as defined in the specification
+- Must work with Icarus Verilog
+- Do not use SystemVerilog Assertions (SVA)
+- Preserve the module interface exactly as defined in spec.md
 
 Priority order:
-1) Correct `valid` / `out_valid` handshake timing (exactly 7 cycles)
-2) Essential edge case handling (zero inputs, overflow, underflow)
-3) Correct normal-number FP32 multiplication with bit-exact precision
-4) Clean synthesizable RTL
+1. Correct `valid` / `out_valid` handshake timing with exact 7-cycle latency
+2. Correct edge case handling:
+   - zero/subnormal input → zero result
+   - overflow → infinity
+   - underflow → zero
+3. Correct normal FP32 multiplication
+4. Clean synthesizable RTL
 
 Behavior expectations:
 - `valid` is a 1-cycle start pulse sampled only when `busy == 0`
 - `out_valid` must pulse exactly 7 clock cycles after acceptance
 - Ignore `valid` while busy
-- Handle essential edge cases as specified: zero inputs → zero result, overflow → infinity, underflow → zero
-- Focus on normal IEEE-754 binary32 operands for the main computation path
-- Implement the 7-cycle sequential design as outlined in the FSM stages
+- Handle all essential edge cases before normal computation
+- Use 48-bit mantissa multiplication for full precision
+- Implement round-to-nearest-even correctly
+- Normalize using `product[47]`
+- Use guard, round, and sticky bits for rounding
 
-CRITICAL IMPLEMENTATION REQUIREMENTS:
-- Use 48-bit mantissa multiplication (24×24=48 bits) for full precision: `wire [47:0] product = a_mant * b_mant;`
-- Implement exact IEEE-754 round-to-nearest-even rounding
-- Handle normalization correctly: check product[47] to determine shift and rounding bit positions
-- Extract rounding bits based on normalization: guard, round, sticky bits
-- Apply RNE rule: round up if `guard == 1 && (round == 1 || sticky == 1 || mantissa[0] == 1)`
-- Handle edge cases FIRST before normal computation:
-  * Zero inputs (exp == 0) → return zero with correct sign
-  * Overflow (final exp ≥ 255) → return infinity with correct sign  
-  * Underflow (final exp ≤ 0) → return zero with correct sign
+Critical implementation requirements:
+- Use:
+  wire [47:0] product = a_mant * b_mant;
+- Extract and use:
+  - guard_bit
+  - round_bit
+  - sticky_bit
+- Apply RNE:
+  - round up if `guard == 1 && (round == 1 || sticky == 1 || mantissa[0] == 1)`
+- Handle edge cases first:
+  - `exp == 0` → zero
+  - final exponent `>= 255` → infinity
+  - final exponent `<= 0` → zero
 
-Coding constraints:
-- Output synthesizable SystemVerilog compatible with Icarus Verilog
-- Do not use SVA property/sequence syntax
-- Use only standard synthesizable RTL constructs
-- Follow the 7-stage FSM structure outlined in the specification
-
-Task:
-Complete the RTL in `multiply_fp32.sv` with module name `fmultiplier`. The implementation must handle both normal numbers and the essential edge cases specified in doc/spec.md to achieve reliable test results. Pay special attention to the edge case handling and rounding implementation details to achieve bit-exact IEEE-754 compliance.
+Deliverable:
+Provide the complete RTL for `multiply_fp32.sv` implementing `fmultiplier` with a 7-cycle sequential FSM and correct IEEE-754 behavior for the supported cases.
