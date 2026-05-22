@@ -40,20 +40,24 @@ For normal numbers:
 
 ## Essential Edge Cases
 
-### Zero / Subnormal Input Detection
-If either input has `exp == 0`:
-- result must be zero
-- result sign = `a_sign ^ b_sign`
+### Exact Special-Case Output Rules
+Apply these rules in order:
 
-### Overflow Detection
-If the final biased exponent is `>= 255`:
-- result = infinity
-- result sign = `a_sign ^ b_sign`
+1. **Zero / subnormal input**
+   - If either operand has `exp == 0`, the result must be signed zero:
+     `z = {a_sign ^ b_sign, 31'b0}`
 
-### Underflow Detection
-If the final biased exponent is `<= 0`:
-- result = zero
-- result sign = `a_sign ^ b_sign`
+2. **Overflow**
+   - If the normalized and rounded exponent is `>= 255`, the result must be signed infinity:
+     `z = {a_sign ^ b_sign, 8'hFF, 23'b0}`
+
+3. **Underflow**
+   - If the normalized and rounded exponent is `<= 0`, the result must be signed zero:
+     `z = {a_sign ^ b_sign, 31'b0}`
+
+4. **No denormal outputs**
+   - Denormal results are not required.
+   - Any underflowed result must be flushed to signed zero.
 
 ---
 
@@ -121,4 +125,4 @@ For each operand:
 ## Precise Implementation Requirements
 
 ### Mantissa Multiplication
-Must use 48-bit result:
+Must use 48-bit result.
